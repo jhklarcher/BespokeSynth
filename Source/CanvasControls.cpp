@@ -101,6 +101,11 @@ void CanvasControls::AllowDragModeSelection(bool allow)
    mDragModeSelector->SetShowing(allow);
 }
 
+void CanvasControls::AllowViewRowsEditing(bool allow)
+{
+   mNumVisibleRowsEntry->SetShowing(allow);
+}
+
 void CanvasControls::PreDrawModule()
 {
    float x, y;
@@ -192,6 +197,7 @@ void CanvasControls::ButtonClicked(ClickButton* button, double time)
    }
    if (button == mClearButton)
    {
+      SetElement(nullptr);
       mCanvas->Clear();
    }
 

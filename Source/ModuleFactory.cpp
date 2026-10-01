@@ -284,6 +284,7 @@
 #include "AudioSyncer.h"
 #include "ChordKeyboard.h"
 #include "TapeLooper.h"
+#include "Arranger.h"
 
 #include <juce_core/juce_core.h>
 
@@ -520,6 +521,7 @@ ModuleFactory::ModuleFactory()
    REGISTER(TapTempo, taptempo, kModuleCategory_Other);
    REGISTER(ZeroCrossRate, zerocrossrate, kModuleCategory_Modulator);
    REGISTER(SessionOrganizer, sessionorganizer, kModuleCategory_Other);
+   REGISTER(Arranger, arranger, kModuleCategory_Other);
    REGISTER(AudioSyncer, audiosyncer, kModuleCategory_Audio);
    REGISTER(ChordKeyboard, chordkeyboard, kModuleCategory_Note);
    REGISTER(TapeLooper, tapelooper, kModuleCategory_Audio);

@@ -52,6 +52,7 @@ public:
    void SetElement(CanvasElement* element);
 
    void AllowDragModeSelection(bool allow);
+   void AllowViewRowsEditing(bool allow);
 
    void CheckboxUpdated(Checkbox* checkbox, double time) override;
    void FloatSliderUpdated(FloatSlider* slider, float oldVal, double time) override;

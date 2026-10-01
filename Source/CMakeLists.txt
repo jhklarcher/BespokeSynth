@@ -57,6 +57,9 @@ target_sources(BespokeSynth PRIVATE
     Amplifier.h
     Arpeggiator.cpp
     Arpeggiator.h
+    Arranger.cpp
+    Arranger.h
+    ArrangerSnapshotSelection.h
     ArrangementController.cpp
     ArrangementController.h
     AudioLevelToCV.cpp
