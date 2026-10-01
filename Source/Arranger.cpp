@@ -114,7 +114,7 @@ void Arranger::CreateUIControls()
    IDrawableModule::CreateUIControls();
 
    mPlayCheckbox = new Checkbox(this, "play arrangement", 5, 5, &mPlay);
-   mLengthEntry = new TextEntry(this, "length", 140, 5, 4, &mNumMeasures, 4, 512);
+   mLengthEntry = new TextEntry(this, "length", 180, 5, 4, &mNumMeasures, 4, 512);
    mLengthEntry->DrawLabel(true);
 
    for (int lane = 0; lane < kNumLanes; ++lane)
@@ -195,7 +195,7 @@ void Arranger::DrawModule()
 
    mPlayCheckbox->Draw();
    mLengthEntry->Draw();
-   DrawTextNormal("shift-click: clip   drag: move   edge: resize   delete: remove", kCanvasX, 20, 11);
+   DrawTextNormal("shift-click: clip   drag: move   edge: resize   delete: remove", 295, 20, 11);
 
    const float viewStart = mCanvas->mViewStart;
    const float viewEnd = mCanvas->mViewEnd;
