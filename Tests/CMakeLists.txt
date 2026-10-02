@@ -8,3 +8,7 @@ add_test(NAME BespokeAudioBridgeTests COMMAND BespokeAudioBridgeTests)
 add_executable(ArrangerSnapshotSelectionTests ArrangerSnapshotSelectionTest.cpp)
 target_include_directories(ArrangerSnapshotSelectionTests PRIVATE ../Source)
 add_test(NAME ArrangerSnapshotSelectionTests COMMAND ArrangerSnapshotSelectionTests)
+
+add_executable(ArrangerClipTimingTests ArrangerClipTimingTest.cpp)
+target_include_directories(ArrangerClipTimingTests PRIVATE ../Source)
+add_test(NAME ArrangerClipTimingTests COMMAND ArrangerClipTimingTests)

@@ -137,5 +137,24 @@ int main()
    for (double measure : { 10.0, 5.0, 7.0, 6.0, 4.0 })
       ok &= ExpectReplay(missing, 0, measure);
 
+   // Drawing uses the resolver's active Canvas order; a held gap has no
+   // controlling clip even though its selected snapshot remains known.
+   ArrangerSnapshotSelection overlapSelection(0, 8.5);
+   for (int order = 0; order < clips.size(); ++order)
+      overlapSelection.Consider(clips[order].lane, clips[order].start, clips[order].end, clips[order].snapshot, clips[order].available, order);
+   ok &= Expect(overlapSelection.GetSnapshotIndex(), 3, "active metadata preserves snapshot selection");
+   ok &= Expect(overlapSelection.GetActiveClipOrder(), 2, "equal-start winner is later Canvas clip");
+
+   ArrangerSnapshotSelection resumedSelection(0, 10);
+   for (int order = 0; order < clips.size(); ++order)
+      resumedSelection.Consider(clips[order].lane, clips[order].start, clips[order].end, clips[order].snapshot, clips[order].available, order);
+   ok &= Expect(resumedSelection.GetActiveClipOrder(), 0, "underlying clip resumes after overlap");
+
+   ArrangerSnapshotSelection heldSelection(0, 12);
+   for (int order = 0; order < clips.size(); ++order)
+      heldSelection.Consider(clips[order].lane, clips[order].start, clips[order].end, clips[order].snapshot, clips[order].available, order);
+   ok &= Expect(heldSelection.GetSnapshotIndex(), 1, "gap retains resolved snapshot");
+   ok &= Expect(heldSelection.GetActiveClipOrder(), -1, "gap never highlights an ended clip");
+
    return ok ? 0 : 1;
 }

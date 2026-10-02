@@ -19,6 +19,7 @@
 #pragma once
 
 #include "Canvas.h"
+#include "ClickButton.h"
 #include "IDrawableModule.h"
 #include "TextEntry.h"
 
@@ -30,9 +31,11 @@
 class CanvasControls;
 class CanvasScrollbar;
 class Checkbox;
+class ClickButton;
 class DropdownList;
 class PatchCableSource;
 class TrackOrganizer;
+class ArrangerSnapshotSelection;
 
 class SnapshotClipElement : public CanvasElement
 {
@@ -43,6 +46,8 @@ public:
 
    int GetSnapshotIndex() const { return mSnapshotIndex; }
    void RefreshSnapshotChoices();
+   void RefreshTimingControls();
+   void TextEntryComplete(TextEntry* entry) override;
    void SaveState(FileStreamOut& out) override;
    void LoadState(FileStreamIn& in) override;
 
@@ -51,10 +56,14 @@ private:
 
    int mSnapshotIndex{ 0 };
    DropdownList* mSnapshotSelector{ nullptr };
+   TextEntry* mStartEntry{ nullptr };
+   TextEntry* mLengthEntry{ nullptr };
+   float mStartBar{ 1 };
+   float mLengthMeasures{ 1 };
    std::vector<std::pair<int, std::string>> mSnapshotChoices;
 };
 
-class Arranger : public IDrawableModule, public ICanvasListener, public ITextEntryListener
+class Arranger : public IDrawableModule, public ICanvasListener, public ITextEntryListener, public IButtonListener
 {
 public:
    Arranger();
@@ -70,9 +79,11 @@ public:
    void Poll() override;
    TrackOrganizer* GetTrack(int lane) const;
    int ResolveSnapshotAt(int lane, double measure) const;
+   ArrangerSnapshotSelection ResolveSelectionAt(int lane, double measure) const;
 
    void CanvasUpdated(Canvas* canvas) override {}
    void TextEntryComplete(TextEntry* entry) override;
+   void ButtonClicked(ClickButton* button, double time) override;
 
    void LoadLayout(const ofxJSONElement& moduleInfo) override;
    void SetUpFromSaveData() override;
@@ -87,6 +98,7 @@ private:
    void DrawModule() override;
    void OnClicked(float x, float y, bool right) override;
    void UpdateCanvasLength();
+   bool CanCreateClip(int lane) const;
 
    static constexpr int kNumLanes = 8;
    static constexpr int kCanvasX = 110;
@@ -95,6 +107,7 @@ private:
    static constexpr int kBottomMargin = 173;
 
    std::array<PatchCableSource*, kNumLanes> mTrackCables{};
+   std::array<ClickButton*, kNumLanes> mAddClipButtons{};
    Canvas* mCanvas{ nullptr };
    CanvasControls* mCanvasControls{ nullptr };
    CanvasScrollbar* mCanvasScrollbar{ nullptr };

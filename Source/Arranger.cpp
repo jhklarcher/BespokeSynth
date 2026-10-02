@@ -17,6 +17,7 @@
 **/
 
 #include "Arranger.h"
+#include "ArrangerClipTiming.h"
 #include "ArrangerSnapshotSelection.h"
 #include "CanvasControls.h"
 #include "CanvasScrollbar.h"
@@ -28,6 +29,7 @@
 #include "TrackOrganizer.h"
 #include "Transport.h"
 
+#include <algorithm>
 #include <cmath>
 
 SnapshotClipElement::SnapshotClipElement(Canvas* canvas, int col, int row)
@@ -36,7 +38,16 @@ SnapshotClipElement::SnapshotClipElement(Canvas* canvas, int col, int row)
    if (auto* arranger = dynamic_cast<Arranger*>(canvas->GetParent()))
       if (auto* track = arranger->GetTrack(row))
          if (auto* snapshots = track->GetSnapshots())
+         {
             mSnapshotIndex = snapshots->GetCurrentSnapshot();
+            if (!snapshots->HasSnapshot(mSnapshotIndex))
+               for (int index = 0; index < snapshots->GetSize(); ++index)
+                  if (snapshots->HasSnapshot(index))
+                  {
+                     mSnapshotIndex = index;
+                     break;
+                  }
+         }
 
    if (canvas->GetControls() != nullptr)
    {
@@ -44,7 +55,45 @@ SnapshotClipElement::SnapshotClipElement(Canvas* canvas, int col, int row)
       mSnapshotSelector->DrawLabel(true);
       mSnapshotSelector->SetShouldSaveState(false);
       AddElementUIControl(mSnapshotSelector);
+      canvas->GetControls()->RemoveUIControl(mSnapshotSelector);
+
+      auto* textListener = dynamic_cast<ITextEntryListener*>(canvas->GetControls());
+      mStartEntry = new TextEntry(textListener, "start bar", 0, 0, 7, &mStartBar, 1.0f, 512.0f);
+      mLengthEntry = new TextEntry(textListener, "length", 0, 0, 7, &mLengthMeasures, 1.0f / 16, 512.0f);
+      for (auto* entry : { mStartEntry, mLengthEntry })
+      {
+         entry->DrawLabel(true);
+         entry->SetShouldSaveState(false);
+         AddElementUIControl(entry);
+         canvas->GetControls()->RemoveUIControl(entry);
+      }
    }
+}
+
+void SnapshotClipElement::RefreshTimingControls()
+{
+   if (mStartEntry != nullptr && IKeyboardFocusListener::GetActiveKeyboardFocus() != mStartEntry)
+      mStartBar = ArrangerClipTiming::BarFromMeasure(ArrangerClipTiming::MeasureFromNormalized(GetStart(), mCanvas->GetNumCols()));
+   if (mLengthEntry != nullptr && IKeyboardFocusListener::GetActiveKeyboardFocus() != mLengthEntry)
+      mLengthMeasures = ArrangerClipTiming::MeasureFromNormalized(GetEnd() - GetStart(), mCanvas->GetNumCols());
+}
+
+void SnapshotClipElement::TextEntryComplete(TextEntry* entry)
+{
+   const int measures = mCanvas->GetNumCols();
+   const double start = ArrangerClipTiming::MeasureFromNormalized(GetStart(), measures);
+   const double length = ArrangerClipTiming::MeasureFromNormalized(GetEnd() - GetStart(), measures);
+   if (entry == mStartEntry)
+   {
+      const double newStart = ArrangerClipTiming::ClampMoveStart(ArrangerClipTiming::MeasureFromBar(mStartBar), length, measures);
+      SetStart(ArrangerClipTiming::NormalizedFromMeasure(newStart, measures), true);
+   }
+   else if (entry == mLengthEntry)
+   {
+      const double newLength = ArrangerClipTiming::ClampLength(mLengthMeasures, start, measures, 1.0 / 16);
+      SetEnd(ArrangerClipTiming::NormalizedFromMeasure(start + newLength, measures));
+   }
+   RefreshTimingControls();
 }
 
 void SnapshotClipElement::RefreshSnapshotChoices()
@@ -109,6 +158,30 @@ void SnapshotClipElement::DrawContents(bool clamp, bool wrapped, ofVec2f offset)
    ofSetColor(color);
    ofRect(rect, 2);
 
+   // Mark only the shared time region. Every overlapping clip draws its own
+   // marking, so the top Canvas element does not hide the overlap cue.
+   for (auto* element : mCanvas->GetElements())
+   {
+      auto* other = dynamic_cast<SnapshotClipElement*>(element);
+      if (other == nullptr || other == this || other->mRow != mRow)
+         continue;
+      const float overlapStart = std::max(GetStart(), other->GetStart());
+      const float overlapEnd = std::min(GetEnd(), other->GetEnd());
+      if (overlapEnd <= overlapStart)
+         continue;
+      const float viewStart = mCanvas->mViewStart / mCanvas->GetLength();
+      const float viewEnd = mCanvas->mViewEnd / mCanvas->GetLength();
+      const float x0 = ofMap(overlapStart, viewStart, viewEnd, 0, mCanvas->GetWidth(), true) + offset.x;
+      const float x1 = ofMap(overlapEnd, viewStart, viewEnd, 0, mCanvas->GetWidth(), true) + offset.x;
+      if (x1 <= x0)
+         continue;
+      ofSetColor(0, 0, 0, 55);
+      ofRect(x0, rect.y + 1, x1 - x0, rect.height - 2);
+      ofSetColor(255, 255, 255, 95);
+      for (float x = x0 + 4; x < x1; x += 8)
+         ofLine(x, rect.y + 2, std::min(x + 4, x1), rect.y + 6);
+   }
+
    if (rect.width >= 35)
    {
       std::string label = snapshots && snapshots->HasSnapshot(mSnapshotIndex) ? snapshots->GetLabel(mSnapshotIndex) : "missing " + ofToString(mSnapshotIndex);
@@ -116,6 +189,17 @@ void SnapshotClipElement::DrawContents(bool clamp, bool wrapped, ofVec2f offset)
          label.pop_back();
       ofSetColor(255, 255, 255);
       DrawTextNormal(label, rect.x + 3, rect.y + rect.height / 2 + 4, 11);
+   }
+
+   if (GetHighlighted())
+   {
+      const float handleWidth = std::min(7.0f, rect.width / 3);
+      ofSetColor(25, 25, 25, 150);
+      ofRect(rect.x, rect.y + 2, handleWidth, rect.height - 4);
+      ofRect(rect.x + rect.width - handleWidth, rect.y + 2, handleWidth, rect.height - 4);
+      ofSetColor(255, 225, 125);
+      ofLine(rect.x + handleWidth / 2, rect.y + 4, rect.x + handleWidth / 2, rect.y + rect.height - 4);
+      ofLine(rect.x + rect.width - handleWidth / 2, rect.y + 4, rect.x + rect.width - handleWidth / 2, rect.y + rect.height - 4);
    }
 }
 
@@ -160,6 +244,10 @@ void Arranger::CreateUIControls()
       mTrackCables[lane]->AddTypeFilter("trackorganizer");
       mTrackCables[lane]->SetManualPosition(8, kCanvasY + lane * ((mHeight - kBottomMargin) / kNumLanes) + 12);
       AddPatchCableSource(mTrackCables[lane]);
+      const float rowHeight = (mHeight - kBottomMargin) / kNumLanes;
+      mAddClipButtons[lane] = new ClickButton(this, ("add clip " + ofToString(lane + 1)).c_str(), 88, kCanvasY + lane * rowHeight + (rowHeight - 16) / 2, ButtonDisplayStyle::kPlus);
+      mAddClipButtons[lane]->SetDimensions(16, 16);
+      mAddClipButtons[lane]->SetCableTargetable(false);
    }
 
    mCanvas = new Canvas(this, kCanvasX, kCanvasY, mWidth - kCanvasX - kRightMargin, mHeight - kBottomMargin, mNumMeasures, kNumLanes, mNumMeasures, &SnapshotClipElement::Create);
@@ -167,6 +255,8 @@ void Arranger::CreateUIControls()
    mCanvas->SetShouldSaveState(false); // Save once, after the module's own state.
    mCanvas->SetNumVisibleRows(kNumLanes);
    mCanvas->SetMajorColumnInterval(4);
+   mCanvas->SetBoundedBarEditing(true);
+   mCanvas->SetResizeHitWidth(9);
    mCanvas->mViewEnd = 8;
    mCanvas->SetListener(this);
 
@@ -189,6 +279,11 @@ void Arranger::Resize(float width, float height)
    {
       if (mTrackCables[lane] != nullptr)
          mTrackCables[lane]->SetManualPosition(8, kCanvasY + lane * ((mHeight - kBottomMargin) / kNumLanes) + 12);
+      if (mAddClipButtons[lane] != nullptr)
+      {
+         const float rowHeight = (mHeight - kBottomMargin) / kNumLanes;
+         mAddClipButtons[lane]->SetPosition(88, kCanvasY + lane * rowHeight + (rowHeight - 16) / 2);
+      }
    }
    if (mCanvas != nullptr)
       mCanvas->SetDimensions(mWidth - kCanvasX - kRightMargin, mHeight - kBottomMargin);
@@ -203,27 +298,69 @@ TrackOrganizer* Arranger::GetTrack(int lane) const
    return dynamic_cast<TrackOrganizer*>(mTrackCables[lane]->GetTarget());
 }
 
-int Arranger::ResolveSnapshotAt(int lane, double measure) const
+bool Arranger::CanCreateClip(int lane) const
 {
+   auto* track = GetTrack(lane);
+   auto* snapshots = track ? track->GetSnapshots() : nullptr;
+   if (snapshots == nullptr)
+      return false;
+   for (int index = 0; index < snapshots->GetSize(); ++index)
+      if (snapshots->HasSnapshot(index))
+         return true;
+   return false;
+}
+
+void Arranger::ButtonClicked(ClickButton* button, double time)
+{
+   for (int lane = 0; lane < kNumLanes; ++lane)
+   {
+      if (button != mAddClipButtons[lane])
+         continue;
+      if (!CanCreateClip(lane))
+         return;
+
+      const double playhead = TheTransport->GetMeasureTime(gTime);
+      const int col = ofClamp((int)ArrangerClipTiming::SnapToBar(playhead), 0, mNumMeasures - 1);
+      auto* clip = mCanvas->CreateElement(col, lane);
+      mCanvas->AddElement(clip);
+      mCanvas->SelectElement(clip);
+      if (col < mCanvas->mViewStart || col + 1 > mCanvas->mViewEnd)
+      {
+         const float viewLength = mCanvas->mViewEnd - mCanvas->mViewStart;
+         mCanvas->mViewStart = ofClamp(col - viewLength / 2, 0, mNumMeasures - viewLength);
+         mCanvas->mViewEnd = mCanvas->mViewStart + viewLength;
+      }
+      return;
+   }
+}
+
+ArrangerSnapshotSelection Arranger::ResolveSelectionAt(int lane, double measure) const
+{
+   ArrangerSnapshotSelection selection(lane, measure);
    if (mCanvas == nullptr || lane < 0 || lane >= kNumLanes || measure < 0)
-      return -1;
+      return selection;
 
    auto* track = GetTrack(lane);
    auto* snapshots = track ? track->GetSnapshots() : nullptr;
    if (snapshots == nullptr)
-      return -1;
+      return selection;
 
-   ArrangerSnapshotSelection selection(lane, measure);
-   for (auto* element : mCanvas->GetElements())
+   const auto& elements = mCanvas->GetElements();
+   for (int order = 0; order < elements.size(); ++order)
    {
-      auto* clip = dynamic_cast<SnapshotClipElement*>(element);
+      auto* clip = dynamic_cast<SnapshotClipElement*>(elements[order]);
       if (clip == nullptr || clip->mRow != lane)
          continue;
 
-      selection.Consider(clip->mRow, clip->GetStart() * mNumMeasures, clip->GetEnd() * mNumMeasures, clip->GetSnapshotIndex(), snapshots->HasSnapshot(clip->GetSnapshotIndex()));
+      selection.Consider(clip->mRow, clip->GetStart() * mNumMeasures, clip->GetEnd() * mNumMeasures, clip->GetSnapshotIndex(), snapshots->HasSnapshot(clip->GetSnapshotIndex()), order);
    }
 
-   return selection.GetSnapshotIndex();
+   return selection;
+}
+
+int Arranger::ResolveSnapshotAt(int lane, double measure) const
+{
+   return ResolveSelectionAt(lane, measure).GetSnapshotIndex();
 }
 
 void Arranger::Poll()
@@ -252,10 +389,13 @@ void Arranger::DrawModule()
 
    mPlayCheckbox->Draw();
    mLengthEntry->Draw();
-   DrawTextNormal("shift-click: add clip   drag: move/resize   delete: remove", 5, 38, 11);
+   DrawTextNormal("+: add clip   shift-click: add   drag: move/resize   alt: fine", 5, 38, 11);
 
    if (auto* clip = dynamic_cast<SnapshotClipElement*>(mCanvasControls->GetSelectedElement()))
+   {
       clip->RefreshSnapshotChoices();
+      clip->RefreshTimingControls();
+   }
 
    const float viewStart = mCanvas->mViewStart;
    const float viewEnd = mCanvas->mViewEnd;
@@ -272,18 +412,44 @@ void Arranger::DrawModule()
    for (int lane = 0; lane < kNumLanes; ++lane)
    {
       TrackOrganizer* track = GetTrack(lane);
+      const bool canCreate = CanCreateClip(lane);
+      mAddClipButtons[lane]->SetShowing(canCreate);
       ofColor color = track ? track->GetColor() : ofColor(90, 90, 90);
       color.a = 55;
       mCanvas->SetRowColor(lane, color);
       ofSetColor(track ? track->GetColor() : ofColor(150, 150, 150));
-      std::string name = track ? track->GetTrackName() : "track " + ofToString(lane + 1);
-      while (name.length() > 1 && GetStringWidth(name) > kCanvasX - 25)
+      std::string name = track ? track->GetTrackName() : "connect track";
+      if (track != nullptr && !canCreate)
+         name = "add snapshot";
+      while (name.length() > 1 && GetStringWidth(name) > 68)
          name.pop_back();
       DrawTextNormal(name, 20, kCanvasY + lane * (mCanvas->GetHeight() / kNumLanes) + 16, 11);
+      if (canCreate)
+         mAddClipButtons[lane]->Draw();
    }
 
    mCanvas->SetCursorPos(TheTransport->GetMeasureTime(gTime) / mNumMeasures);
    mCanvas->Draw();
+
+   if (mPlay)
+   {
+      const double measure = TheTransport->GetMeasureTime(gTime);
+      ofPushStyle();
+      ofNoFill();
+      ofSetLineWidth(2);
+      ofSetColor(110, 245, 220);
+      const auto& elements = mCanvas->GetElements();
+      for (int lane = 0; lane < kNumLanes; ++lane)
+      {
+         const int order = ResolveSelectionAt(lane, measure).GetActiveClipOrder();
+         if (order < 0 || order >= elements.size())
+            continue; // A held gap state has no active clip to outline.
+         const ofRectangle rect = elements[order]->GetRect(true, false);
+         if (rect.width > 2 && rect.height > 2)
+            ofRect(kCanvasX + rect.x + 1, kCanvasY + rect.y + 1, rect.width - 2, rect.height - 2);
+      }
+      ofPopStyle();
+   }
    mCanvasScrollbar->Draw();
    mCanvasControls->Draw();
 }
@@ -306,6 +472,15 @@ void Arranger::UpdateCanvasLength()
       return;
    mCanvas->SetLength(mNumMeasures);
    mCanvas->SetNumCols(mNumMeasures);
+   for (auto* element : mCanvas->GetElements())
+   {
+      const double originalStart = ArrangerClipTiming::MeasureFromNormalized(element->GetStart(), mNumMeasures);
+      const double originalLength = ArrangerClipTiming::MeasureFromNormalized(element->GetEnd() - element->GetStart(), mNumMeasures);
+      const double length = ArrangerClipTiming::ClampLength(originalLength, 0, mNumMeasures, 1.0 / 16);
+      const double start = ArrangerClipTiming::ClampMoveStart(originalStart, length, mNumMeasures);
+      element->SetStart(ArrangerClipTiming::NormalizedFromMeasure(start, mNumMeasures), true);
+      element->SetEnd(ArrangerClipTiming::NormalizedFromMeasure(start + length, mNumMeasures));
+   }
    float viewLength = mCanvas->mViewEnd - mCanvas->mViewStart;
    viewLength = ofClamp(viewLength, 1, (float)mNumMeasures);
    mCanvas->mViewStart = ofClamp(mCanvas->mViewStart, 0, (float)mNumMeasures - viewLength);

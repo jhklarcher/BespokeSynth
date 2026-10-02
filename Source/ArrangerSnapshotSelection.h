@@ -34,7 +34,7 @@ public:
    {
    }
 
-   void Consider(int lane, double start, double end, int snapshotIndex, bool available)
+   void Consider(int lane, double start, double end, int snapshotIndex, bool available, int clipOrder = -1)
    {
       if (mMeasure < 0 || lane != mLane || end <= start || start > mMeasure || !available)
          return;
@@ -49,11 +49,13 @@ public:
       {
          mActiveStart = start;
          mActiveIndex = snapshotIndex;
+         mActiveClipOrder = clipOrder;
          mHasActive = true;
       }
    }
 
    int GetSnapshotIndex() const { return mHasActive ? mActiveIndex : mPreviousIndex; }
+   int GetActiveClipOrder() const { return mHasActive ? mActiveClipOrder : -1; }
 
 private:
    int mLane;
@@ -62,6 +64,7 @@ private:
    double mPreviousEnd{ -std::numeric_limits<double>::infinity() };
    double mPreviousStart{ -std::numeric_limits<double>::infinity() };
    int mActiveIndex{ -1 };
+   int mActiveClipOrder{ -1 };
    int mPreviousIndex{ -1 };
    bool mHasActive{ false };
 };

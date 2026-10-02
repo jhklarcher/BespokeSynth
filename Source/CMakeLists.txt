@@ -60,6 +60,7 @@ target_sources(BespokeSynth PRIVATE
     Arranger.cpp
     Arranger.h
     ArrangerSnapshotSelection.h
+    ArrangerClipTiming.h
     ArrangementController.cpp
     ArrangementController.h
     AudioLevelToCV.cpp

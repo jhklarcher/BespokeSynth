@@ -63,6 +63,7 @@ public:
    virtual void FloatSliderUpdated(std::string label, float oldVal, float newVal, double time);
    virtual void IntSliderUpdated(std::string label, int oldVal, float newVal, double time);
    virtual void ButtonClicked(std::string label, double time);
+   virtual void TextEntryComplete(TextEntry* entry) {}
 
    virtual void SaveState(FileStreamOut& out);
    virtual void LoadState(FileStreamIn& in);

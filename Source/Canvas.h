@@ -121,6 +121,8 @@ public:
    void SetMajorColumnInterval(int interval) { mMajorColumnInterval = interval; }
    void SetDragMode(DragMode mode) { mDragMode = mode; }
    DragMode GetDragMode() const { return mDragMode; }
+   void SetBoundedBarEditing(bool enabled) { mBoundedBarEditing = enabled; }
+   void SetResizeHitWidth(float width) { mResizeHitWidth = width; }
    bool IsRowVisible(int row) const;
    void SetRowColor(int row, ofColor color);
    juce::MouseCursor GetMouseCursorType();
@@ -186,6 +188,8 @@ private:
    int mNumCols;
    int mNumVisibleRows;
    DragMode mDragMode{ DragMode::kDragBoth };
+   bool mBoundedBarEditing{ false };
+   float mResizeHitWidth{ 0 };
 
    friend CanvasControls;
 };

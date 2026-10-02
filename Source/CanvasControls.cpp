@@ -171,6 +171,8 @@ void CanvasControls::TextEntryComplete(TextEntry* entry)
       if (mCanvas->mNumVisibleRows > mCanvas->GetNumRows())
          mCanvas->mNumVisibleRows = mCanvas->GetNumRows();
    }
+   else if (mSelectedElement != nullptr)
+      mSelectedElement->TextEntryComplete(entry);
 }
 
 void CanvasControls::ButtonClicked(ClickButton* button, double time)

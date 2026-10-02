@@ -32,6 +32,8 @@
 #include "Scale.h"
 #include "Snapshots.h"
 
+#include <algorithm>
+
 Canvas::Canvas(IDrawableModule* parent, int x, int y, int w, int h, float length, int rows, int cols, CreateCanvasElementFn elementCreator)
 : mWidth(w)
 , mHeight(h)
@@ -292,7 +294,7 @@ bool Canvas::MouseMoved(float x, float y)
 {
    CheckHover(x, y);
 
-   bool quantize = GetKeyModifiers() & kModifier_Command;
+   bool quantize = mBoundedBarEditing ? !(GetKeyModifiers() & kModifier_Alt) : GetKeyModifiers() & kModifier_Command;
 
    if (mDragEnd != kHighlightEnd_None)
    {
@@ -309,6 +311,8 @@ bool Canvas::MouseMoved(float x, float y)
                float start = element->GetStart() + startDelta;
                if (quantize)
                   start = QuantizeToGrid(start);
+               if (mBoundedBarEditing)
+                  start = ofClamp(start, 0, std::max(0.0f, element->GetEnd() - (quantize ? 1.0f : 1.0f / 16) / GetNumCols()));
                element->SetStart(start, false);
             }
          }
@@ -325,6 +329,8 @@ bool Canvas::MouseMoved(float x, float y)
                float end = element->GetEnd() + endDelta;
                if (quantize)
                   end = QuantizeToGrid(end);
+               if (mBoundedBarEditing)
+                  end = ofClamp(end, std::min(1.0f, element->GetStart() + (quantize ? 1.0f : 1.0f / 16) / GetNumCols()), 1);
                element->SetEnd(end);
             }
          }
@@ -367,12 +373,13 @@ bool Canvas::MouseMoved(float x, float y)
             float endX = rect.x + rect.width;
             if (y >= rect.y && y < rect.y + rect.height)
             {
-               if (fabsf(startX - x) < 3 / gDrawScale && element->IsResizable())
+               const float hitWidth = mResizeHitWidth > 0 ? std::min(mResizeHitWidth, rect.width / 3) : 3 / gDrawScale;
+               if (fabsf(startX - x) < hitWidth && element->IsResizable())
                {
                   mHighlightEnd = kHighlightEnd_Start;
                   mHighlightEndElement = element;
                }
-               if (fabsf(endX - x) < 3 / gDrawScale && element->IsResizable())
+               if (fabsf(endX - x) < hitWidth && element->IsResizable())
                {
                   mHighlightEnd = kHighlightEnd_End;
                   mHighlightEndElement = element;
@@ -443,10 +450,23 @@ void Canvas::MouseReleased()
 {
    if (mClick && mClickedElement != nullptr && mDragEnd == kHighlightEnd_None)
    {
+      const ofVec2f dragOffset = (ofVec2f(TheSynth->GetRawMouseX(), TheSynth->GetRawMouseY()) - mClickedElementStartMousePos) / gDrawScale;
       for (auto* element : mElements)
       {
          if (element->GetHighlighted())
-            element->MoveElementByDrag((ofVec2f(TheSynth->GetRawMouseX(), TheSynth->GetRawMouseY()) - mClickedElementStartMousePos) / gDrawScale);
+         {
+            element->MoveElementByDrag(dragOffset);
+            if (mBoundedBarEditing)
+            {
+               const float length = ofClamp(element->GetEnd() - element->GetStart(), 1.0f / (16 * GetNumCols()), 1);
+               float start = element->GetStart();
+               if (dragOffset.lengthSquared() > 1 && !(GetKeyModifiers() & kModifier_Alt))
+                  start = QuantizeToGrid(start);
+               start = ofClamp(start, 0, 1 - length);
+               element->SetStart(start, true);
+               element->SetEnd(start + length);
+            }
+         }
       }
 
       if (mListener)
