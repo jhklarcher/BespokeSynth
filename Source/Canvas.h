@@ -43,6 +43,7 @@ class ICanvasListener
 public:
    virtual ~ICanvasListener() {}
    virtual void CanvasUpdated(Canvas* canvas) = 0;
+   virtual bool CanCreateElement(int col, int row) const { return true; }
    virtual void ElementRemoved(CanvasElement* element) {}
 };
 

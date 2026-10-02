@@ -82,6 +82,7 @@ public:
    ArrangerSnapshotSelection ResolveSelectionAt(int lane, double measure) const;
 
    void CanvasUpdated(Canvas* canvas) override {}
+   bool CanCreateElement(int col, int row) const override { return CanCreateClip(row); }
    void TextEntryComplete(TextEntry* entry) override;
    void ButtonClicked(ClickButton* button, double time) override;
 

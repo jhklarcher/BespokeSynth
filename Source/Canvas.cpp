@@ -248,11 +248,14 @@ void Canvas::OnClicked(float x, float y, bool right)
          if (GetKeyModifiers() & kModifier_Shift)
          {
             CanvasCoord coord = GetCoordAt(x, y);
-            CanvasElement* element = CreateElement(coord.col, coord.row);
-            AddElement(element);
-            SelectElement(element);
-            mHasDuplicatedThisDrag = true; //to prevent a duplicate from being made
-            mClickedElementStartMousePos.set(TheSynth->GetRawMouseX(), TheSynth->GetRawMouseY());
+            if (mListener == nullptr || mListener->CanCreateElement(coord.col, coord.row))
+            {
+               CanvasElement* element = CreateElement(coord.col, coord.row);
+               AddElement(element);
+               SelectElement(element);
+               mHasDuplicatedThisDrag = true; //to prevent a duplicate from being made
+               mClickedElementStartMousePos.set(TheSynth->GetRawMouseX(), TheSynth->GetRawMouseY());
+            }
          }
          else if (GetKeyModifiers() & kModifier_Alt)
          {
@@ -686,8 +689,8 @@ CanvasCoord Canvas::GetCoordAt(int x, int y)
 {
    if (x >= 0 && x < GetWidth() && y >= 0 && y < GetHeight())
    {
-      int col = int(ofMap(x / mWidth, 0, mLength, mViewStart, mViewEnd) * mNumCols);
-      int row = (y / GetHeight()) * GetNumVisibleRows() + mRowOffset;
+      int col = ofClamp(int(ofMap(x, 0, mWidth, mViewStart, mViewEnd) / mLength * mNumCols), 0, mNumCols - 1);
+      int row = int(float(y) / GetHeight() * GetNumVisibleRows()) + mRowOffset;
       return CanvasCoord(col, row);
    }
    return CanvasCoord(-1, -1);

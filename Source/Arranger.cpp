@@ -55,7 +55,6 @@ SnapshotClipElement::SnapshotClipElement(Canvas* canvas, int col, int row)
       mSnapshotSelector->DrawLabel(true);
       mSnapshotSelector->SetShouldSaveState(false);
       AddElementUIControl(mSnapshotSelector);
-      canvas->GetControls()->RemoveUIControl(mSnapshotSelector);
 
       auto* textListener = dynamic_cast<ITextEntryListener*>(canvas->GetControls());
       mStartEntry = new TextEntry(textListener, "start bar", 0, 0, 7, &mStartBar, 1.0f, 512.0f);
@@ -65,7 +64,6 @@ SnapshotClipElement::SnapshotClipElement(Canvas* canvas, int col, int row)
          entry->DrawLabel(true);
          entry->SetShouldSaveState(false);
          AddElementUIControl(entry);
-         canvas->GetControls()->RemoveUIControl(entry);
       }
    }
 }
