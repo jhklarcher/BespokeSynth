@@ -23,11 +23,14 @@
 #include "TextEntry.h"
 
 #include <array>
+#include <string>
+#include <utility>
+#include <vector>
 
 class CanvasControls;
 class CanvasScrollbar;
 class Checkbox;
-class IntSlider;
+class DropdownList;
 class PatchCableSource;
 class TrackOrganizer;
 
@@ -39,6 +42,7 @@ public:
    CanvasElement* CreateDuplicate() const override;
 
    int GetSnapshotIndex() const { return mSnapshotIndex; }
+   void RefreshSnapshotChoices();
    void SaveState(FileStreamOut& out) override;
    void LoadState(FileStreamIn& in) override;
 
@@ -46,7 +50,8 @@ private:
    void DrawContents(bool clamp, bool wrapped, ofVec2f offset) override;
 
    int mSnapshotIndex{ 0 };
-   IntSlider* mSnapshotSlider{ nullptr };
+   DropdownList* mSnapshotSelector{ nullptr };
+   std::vector<std::pair<int, std::string>> mSnapshotChoices;
 };
 
 class Arranger : public IDrawableModule, public ICanvasListener, public ITextEntryListener
@@ -60,6 +65,8 @@ public:
    static bool AcceptsPulses() { return false; }
 
    void CreateUIControls() override;
+   bool IsResizable() const override { return mHasSerializedDimensions; }
+   void Resize(float width, float height) override;
    void Poll() override;
    TrackOrganizer* GetTrack(int lane) const;
    int ResolveSnapshotAt(int lane, double measure) const;
@@ -72,7 +79,7 @@ public:
    void SaveLayout(ofxJSONElement& moduleInfo) override;
    void SaveState(FileStreamOut& out) override;
    void LoadState(FileStreamIn& in, int rev) override;
-   int GetModuleSaveStateRev() const override { return 1; }
+   int GetModuleSaveStateRev() const override { return 2; }
 
    bool IsEnabled() const override { return true; }
 
@@ -84,8 +91,8 @@ private:
    static constexpr int kNumLanes = 8;
    static constexpr int kCanvasX = 110;
    static constexpr int kCanvasY = 60;
-   static constexpr int kCanvasWidth = 780;
-   static constexpr int kCanvasHeight = 192;
+   static constexpr int kRightMargin = 10;
+   static constexpr int kBottomMargin = 173;
 
    std::array<PatchCableSource*, kNumLanes> mTrackCables{};
    Canvas* mCanvas{ nullptr };
@@ -95,4 +102,5 @@ private:
    Checkbox* mPlayCheckbox{ nullptr };
    int mNumMeasures{ 64 };
    bool mPlay{ true };
+   bool mHasSerializedDimensions{ true };
 };

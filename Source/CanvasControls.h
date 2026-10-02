@@ -50,6 +50,7 @@ public:
 
    void SetCanvas(Canvas* canvas);
    void SetElement(CanvasElement* element);
+   CanvasElement* GetSelectedElement() const { return mSelectedElement; }
 
    void AllowDragModeSelection(bool allow);
    void AllowViewRowsEditing(bool allow);

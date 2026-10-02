@@ -21,8 +21,8 @@
 #include "CanvasControls.h"
 #include "CanvasScrollbar.h"
 #include "Checkbox.h"
+#include "DropdownList.h"
 #include "PatchCableSource.h"
-#include "Slider.h"
 #include "Snapshots.h"
 #include "SynthGlobals.h"
 #include "TrackOrganizer.h"
@@ -40,10 +40,47 @@ SnapshotClipElement::SnapshotClipElement(Canvas* canvas, int col, int row)
 
    if (canvas->GetControls() != nullptr)
    {
-      mSnapshotSlider = new IntSlider(dynamic_cast<IIntSliderListener*>(canvas->GetControls()), "snapshot", 0, 0, 100, 15, &mSnapshotIndex, 0, 127);
-      mSnapshotSlider->SetShouldSaveState(false);
-      AddElementUIControl(mSnapshotSlider);
+      mSnapshotSelector = new DropdownList(dynamic_cast<IDropdownListener*>(canvas->GetControls()), "snapshot", 0, 0, &mSnapshotIndex, 170);
+      mSnapshotSelector->DrawLabel(true);
+      mSnapshotSelector->SetShouldSaveState(false);
+      AddElementUIControl(mSnapshotSelector);
    }
+}
+
+void SnapshotClipElement::RefreshSnapshotChoices()
+{
+   if (mSnapshotSelector == nullptr)
+      return;
+
+   auto* arranger = dynamic_cast<Arranger*>(mCanvas->GetParent());
+   TrackOrganizer* track = arranger ? arranger->GetTrack(mRow) : nullptr;
+   Snapshots* snapshots = track ? track->GetSnapshots() : nullptr;
+   std::vector<std::pair<int, std::string>> choices;
+   bool hasCurrent = false;
+   if (snapshots != nullptr)
+   {
+      for (int index = 0; index < snapshots->GetSize(); ++index)
+      {
+         if (!snapshots->HasSnapshot(index))
+            continue;
+
+         std::string label = snapshots->GetLabel(index);
+         const std::string number = ofToString(index);
+         choices.emplace_back(index, label.empty() || label == number ? number : number + ": " + label);
+         hasCurrent |= index == mSnapshotIndex;
+      }
+   }
+
+   if (!hasCurrent)
+      choices.insert(choices.begin(), { mSnapshotIndex, "missing " + ofToString(mSnapshotIndex) });
+
+   if (choices == mSnapshotChoices)
+      return;
+
+   mSnapshotSelector->Clear();
+   for (const auto& choice : choices)
+      mSnapshotSelector->AddLabel(choice.second, choice.first);
+   mSnapshotChoices = std::move(choices);
 }
 
 CanvasElement* SnapshotClipElement::CreateDuplicate() const
@@ -99,7 +136,7 @@ void SnapshotClipElement::LoadState(FileStreamIn& in)
 }
 
 Arranger::Arranger()
-: IDrawableModule(900, 365)
+: IDrawableModule(620, 365)
 {
 }
 
@@ -121,16 +158,16 @@ void Arranger::CreateUIControls()
    {
       mTrackCables[lane] = new PatchCableSource(this, kConnectionType_Special);
       mTrackCables[lane]->AddTypeFilter("trackorganizer");
-      mTrackCables[lane]->SetManualPosition(8, kCanvasY + lane * (kCanvasHeight / kNumLanes) + 12);
+      mTrackCables[lane]->SetManualPosition(8, kCanvasY + lane * ((mHeight - kBottomMargin) / kNumLanes) + 12);
       AddPatchCableSource(mTrackCables[lane]);
    }
 
-   mCanvas = new Canvas(this, kCanvasX, kCanvasY, kCanvasWidth, kCanvasHeight, mNumMeasures, kNumLanes, mNumMeasures, &SnapshotClipElement::Create);
+   mCanvas = new Canvas(this, kCanvasX, kCanvasY, mWidth - kCanvasX - kRightMargin, mHeight - kBottomMargin, mNumMeasures, kNumLanes, mNumMeasures, &SnapshotClipElement::Create);
    AddUIControl(mCanvas);
    mCanvas->SetShouldSaveState(false); // Save once, after the module's own state.
    mCanvas->SetNumVisibleRows(kNumLanes);
    mCanvas->SetMajorColumnInterval(4);
-   mCanvas->mViewEnd = 16;
+   mCanvas->mViewEnd = 8;
    mCanvas->SetListener(this);
 
    mCanvasControls = new CanvasControls();
@@ -142,6 +179,21 @@ void Arranger::CreateUIControls()
 
    mCanvasScrollbar = new CanvasScrollbar(mCanvas, "scrollh", CanvasScrollbar::Style::kHorizontal);
    AddUIControl(mCanvasScrollbar);
+}
+
+void Arranger::Resize(float width, float height)
+{
+   mWidth = MAX(width, 430);
+   mHeight = MAX(height, 320);
+   for (int lane = 0; lane < kNumLanes; ++lane)
+   {
+      if (mTrackCables[lane] != nullptr)
+         mTrackCables[lane]->SetManualPosition(8, kCanvasY + lane * ((mHeight - kBottomMargin) / kNumLanes) + 12);
+   }
+   if (mCanvas != nullptr)
+      mCanvas->SetDimensions(mWidth - kCanvasX - kRightMargin, mHeight - kBottomMargin);
+   if (mCanvasControls != nullptr)
+      mCanvasControls->Resize(mWidth - kCanvasX - kRightMargin, 92);
 }
 
 TrackOrganizer* Arranger::GetTrack(int lane) const
@@ -195,7 +247,10 @@ void Arranger::DrawModule()
 
    mPlayCheckbox->Draw();
    mLengthEntry->Draw();
-   DrawTextNormal("shift-click: clip   drag: move   edge: resize   delete: remove", 295, 20, 11);
+   DrawTextNormal("shift-click: add clip   drag: move/resize   delete: remove", 5, 38, 11);
+
+   if (auto* clip = dynamic_cast<SnapshotClipElement*>(mCanvasControls->GetSelectedElement()))
+      clip->RefreshSnapshotChoices();
 
    const float viewStart = mCanvas->mViewStart;
    const float viewEnd = mCanvas->mViewEnd;
@@ -203,7 +258,7 @@ void Arranger::DrawModule()
    ofSetColor(150, 150, 150);
    for (int measure = (int)std::ceil(viewStart); measure <= (int)std::floor(viewEnd); ++measure)
    {
-      float x = kCanvasX + (measure - viewStart) / (viewEnd - viewStart) * kCanvasWidth;
+      float x = kCanvasX + (measure - viewStart) / (viewEnd - viewStart) * mCanvas->GetWidth();
       ofLine(x, kCanvasY - 16, x, kCanvasY - 2);
       DrawTextNormal(ofToString(measure + 1), x + 2, kCanvasY - 4, 10);
    }
@@ -219,7 +274,7 @@ void Arranger::DrawModule()
       std::string name = track ? track->GetTrackName() : "track " + ofToString(lane + 1);
       while (name.length() > 1 && GetStringWidth(name) > kCanvasX - 25)
          name.pop_back();
-      DrawTextNormal(name, 20, kCanvasY + lane * (kCanvasHeight / kNumLanes) + 16, 11);
+      DrawTextNormal(name, 20, kCanvasY + lane * (mCanvas->GetHeight() / kNumLanes) + 16, 11);
    }
 
    mCanvas->SetCursorPos(TheTransport->GetMeasureTime(gTime) / mNumMeasures);
@@ -230,9 +285,9 @@ void Arranger::DrawModule()
 
 void Arranger::OnClicked(float x, float y, bool right)
 {
-   if (!right && x >= kCanvasX && x < kCanvasX + kCanvasWidth && y >= kCanvasY - 16 && y < kCanvasY)
+   if (!right && x >= kCanvasX && x < kCanvasX + mCanvas->GetWidth() && y >= kCanvasY - 16 && y < kCanvasY)
    {
-      double measure = mCanvas->mViewStart + (x - kCanvasX) / kCanvasWidth * (mCanvas->mViewEnd - mCanvas->mViewStart);
+      double measure = mCanvas->mViewStart + (x - kCanvasX) / mCanvas->GetWidth() * (mCanvas->mViewEnd - mCanvas->mViewStart);
       TheTransport->SetMeasureTime(std::floor(measure));
       return;
    }
@@ -285,7 +340,9 @@ void Arranger::SaveState(FileStreamOut& out)
 void Arranger::LoadState(FileStreamIn& in, int rev)
 {
    mCanvasControls->SetElement(nullptr);
+   mHasSerializedDimensions = rev >= 2;
    IDrawableModule::LoadState(in, rev);
+   mHasSerializedDimensions = true;
    LoadStateValidate(rev <= GetModuleSaveStateRev());
    mCanvas->LoadState(in);
    in >> mCanvas->mViewStart;
