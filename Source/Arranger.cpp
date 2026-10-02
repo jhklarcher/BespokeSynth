@@ -208,14 +208,19 @@ int Arranger::ResolveSnapshotAt(int lane, double measure) const
    if (mCanvas == nullptr || lane < 0 || lane >= kNumLanes || measure < 0)
       return -1;
 
+   auto* track = GetTrack(lane);
+   auto* snapshots = track ? track->GetSnapshots() : nullptr;
+   if (snapshots == nullptr)
+      return -1;
+
    ArrangerSnapshotSelection selection(lane, measure);
    for (auto* element : mCanvas->GetElements())
    {
       auto* clip = dynamic_cast<SnapshotClipElement*>(element);
-      if (clip == nullptr)
+      if (clip == nullptr || clip->mRow != lane)
          continue;
 
-      selection.Consider(clip->mRow, clip->GetStart() * mNumMeasures, clip->GetEnd() * mNumMeasures, clip->GetSnapshotIndex());
+      selection.Consider(clip->mRow, clip->GetStart() * mNumMeasures, clip->GetEnd() * mNumMeasures, clip->GetSnapshotIndex(), snapshots->HasSnapshot(clip->GetSnapshotIndex()));
    }
 
    return selection.GetSnapshotIndex();

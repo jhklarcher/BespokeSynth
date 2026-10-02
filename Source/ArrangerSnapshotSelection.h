@@ -21,7 +21,10 @@
 #include <limits>
 
 // Resolve the desired snapshot from absolute transport position, independently of
-// the order in which clips were crossed during playback.
+// the order in which clips were crossed during playback. Clips occupy [start, end).
+// While clips overlap, the latest start wins (then the later Canvas element).
+// At an end boundary an underlying clip resumes; after all clips end, hold the
+// snapshot that was active immediately before the gap. Unavailable clips are inert.
 class ArrangerSnapshotSelection
 {
 public:
@@ -31,13 +34,14 @@ public:
    {
    }
 
-   void Consider(int lane, double start, double end, int snapshotIndex)
+   void Consider(int lane, double start, double end, int snapshotIndex, bool available)
    {
-      if (mMeasure < 0 || lane != mLane || end <= start || start > mMeasure)
+      if (mMeasure < 0 || lane != mLane || end <= start || start > mMeasure || !available)
          return;
 
-      if (start >= mPreviousStart)
+      if (end <= mMeasure && (end > mPreviousEnd || (end == mPreviousEnd && start >= mPreviousStart)))
       {
+         mPreviousEnd = end;
          mPreviousStart = start;
          mPreviousIndex = snapshotIndex;
       }
@@ -55,6 +59,7 @@ private:
    int mLane;
    double mMeasure;
    double mActiveStart{ -std::numeric_limits<double>::infinity() };
+   double mPreviousEnd{ -std::numeric_limits<double>::infinity() };
    double mPreviousStart{ -std::numeric_limits<double>::infinity() };
    int mActiveIndex{ -1 };
    int mPreviousIndex{ -1 };
